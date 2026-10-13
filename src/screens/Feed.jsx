@@ -2,7 +2,7 @@ import Icon from '../components/Icon'
 import Post from '../components/Post'
 
 // S1: instagram home feed
-export default function Feed({ posts, onOpenEvent, onInsights, onCreate }) {
+export default function Feed({ posts, onOpenEvent, onInsights, onCreate, onAccount }) {
   return (
     <div className="feed">
       <header className="ig-header">
@@ -33,7 +33,8 @@ export default function Feed({ posts, onOpenEvent, onInsights, onCreate }) {
           <Icon name="plus" size={26} />
         </button>
         <Icon name="reels" size={26} />
-        <div className="avatar small">U</div>
+        {/* your profile pic opens calendar settings */}
+        <button className="avatar small" onClick={onAccount} aria-label="Calendar settings">U</button>
       </nav>
     </div>
   )

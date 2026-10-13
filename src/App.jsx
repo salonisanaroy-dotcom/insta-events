@@ -1,13 +1,11 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import PhoneFrame from './components/PhoneFrame'
 import Toast from './components/Toast'
 import Feed from './screens/Feed'
 import EventCard from './screens/EventCard'
 import ConnectDialog from './screens/ConnectDialog'
 import AddedSheet from './screens/AddedSheet'
-import ChooseAccount from './screens/google/ChooseAccount'
-import Verify from './screens/google/Verify'
-import AllowAccess from './screens/google/AllowAccess'
+import AccountSheet from './screens/AccountSheet'
 import NewPost from './screens/creator/NewPost'
 import EventForm from './screens/creator/EventForm'
 import ReviewPost from './screens/creator/ReviewPost'
@@ -24,8 +22,7 @@ export default function App() {
   const [screen, setScreen] = useState('feed') // which screen is showing
   const [activeId, setActiveId] = useState(null) // which post we're looking at
   const [reminder, setReminder] = useState('1 day before') // last reminder picked
-  const [connected, setConnected] = useState(false) // linked google yet? only once
-  const [addedIds, setAddedIds] = useState([]) // posts this student added
+  const [me, setMe] = useState({ connected: false }) // your google account, from the server
   const [draft, setDraft] = useState(blankDraft) // the post being created
   const [formReturn, setFormReturn] = useState('newPost') // where the event form goes back to
   const [toast, setToast] = useState('') // popup message at the bottom
@@ -39,6 +36,54 @@ export default function App() {
     setPosts((prev) => prev.map((p) => (p.id === id ? { ...p, stats: change(p.stats) } : p)))
   }
 
+  // count an add once per post, then bump the insights numbers
+  const recordAdd = useCallback((id, choice) => {
+    setPosts((prev) =>
+      prev.map((p) => {
+        if (p.id !== id || p.addedByMe) return p // not this post, or already counted
+        const s = p.stats
+        return {
+          ...p,
+          addedByMe: true,
+          stats: {
+            ...s,
+            added: s.added + 1,
+            reminders: { ...s.reminders, [choice]: s.reminders[choice] + 1 },
+            addsByDay: [...s.addsByDay.slice(0, -1), s.addsByDay.at(-1) + 1], // add to today
+          },
+        }
+      }),
+    )
+  }, [])
+
+  // ---------- when the app first loads ----------
+  useEffect(() => {
+    // ask the server if you're signed in to google
+    fetch('/api/me')
+      .then((res) => res.json())
+      .then((data) => {
+        setMe(data)
+
+        // did we just come back from google's sign in page?
+        const params = new URLSearchParams(window.location.search)
+        const pending = JSON.parse(sessionStorage.getItem('pendingAdd') ?? 'null')
+
+        if (params.get('connected') === '1' && data.connected && pending) {
+          // finish the add they started before leaving for google
+          setActiveId(pending.postId)
+          setReminder(pending.reminder)
+          recordAdd(pending.postId, pending.reminder)
+          setScreen('added')
+        } else if (params.get('connected') === '0') {
+          setToast('Google sign in was canceled')
+        }
+
+        sessionStorage.removeItem('pendingAdd')
+        if (params.has('connected')) window.history.replaceState({}, '', '/') // clean up the url
+      })
+      .catch(() => setMe({ connected: false, offline: true })) // server isn't running
+  }, [recordAdd])
+
   // ---------- student side ----------
   function openEvent(id) {
     setActiveId(id)
@@ -48,28 +93,19 @@ export default function App() {
 
   function handleAdd(choice) {
     setReminder(choice)
-    // first time goes through google sign in, after that it's one tap
-    if (connected) finishAdding(choice)
-    else setScreen('connect')
-  }
-
-  function finishAdding(choice) {
-    // only count it once per post
-    if (!addedIds.includes(activeId)) {
-      setAddedIds([...addedIds, activeId])
-      updateStats(activeId, (s) => ({
-        ...s,
-        added: s.added + 1,
-        reminders: { ...s.reminders, [choice]: s.reminders[choice] + 1 },
-        addsByDay: [...s.addsByDay.slice(0, -1), s.addsByDay.at(-1) + 1], // add to today
-      }))
+    // already signed in? one tap. if not, connect google first
+    if (me.connected) {
+      recordAdd(activeId, choice)
+      setScreen('added')
+    } else {
+      setScreen('connect')
     }
-    setScreen('added')
   }
 
-  function handleAllow() {
-    setConnected(true)
-    finishAdding(reminder)
+  function goToGoogle() {
+    // the page is about to reload, so remember what they were adding
+    sessionStorage.setItem('pendingAdd', JSON.stringify({ postId: activeId, reminder }))
+    window.location.href = '/auth/google' // the server sends us on to google
   }
 
   // ---------- creator side ----------
@@ -127,9 +163,6 @@ export default function App() {
 
   // ---------- full page screens ----------
   const pages = {
-    chooseAccount: <ChooseAccount onPick={() => setScreen('verify')} onCancel={backToFeed} />,
-    verify: <Verify onVerified={() => setScreen('allow')} onCancel={backToFeed} />,
-    allow: <AllowAccess onAllow={handleAllow} onCancel={backToFeed} />,
     newPost: (
       <NewPost
         draft={draft}
@@ -167,21 +200,28 @@ export default function App() {
       {pages[screen] ?? (
         // anything that isn't a full page sits on top of the feed
         <>
-          <Feed posts={posts} onOpenEvent={openEvent} onInsights={openInsights} onCreate={startPost} />
+          <Feed
+            posts={posts}
+            onOpenEvent={openEvent}
+            onInsights={openInsights}
+            onCreate={startPost}
+            onAccount={() => setScreen('account')}
+          />
 
-          {screen === 'eventCard' && (
+          {screen === 'eventCard' && activePost && (
             <EventCard
               post={activePost}
               onClose={backToFeed}
               onAddToCalendar={handleAdd}
-              alreadyAdded={addedIds.includes(activeId)}
+              alreadyAdded={activePost.addedByMe}
               savedReminder={reminder}
             />
           )}
-          {screen === 'connect' && (
-            <ConnectDialog onAllow={() => setScreen('chooseAccount')} onCancel={backToFeed} />
+          {screen === 'connect' && <ConnectDialog onAllow={goToGoogle} onCancel={backToFeed} />}
+          {screen === 'added' && activePost && (
+            <AddedSheet post={activePost} reminder={reminder} email={me.email} onDone={backToFeed} />
           )}
-          {screen === 'added' && <AddedSheet post={activePost} reminder={reminder} onDone={backToFeed} />}
+          {screen === 'account' && <AccountSheet me={me} onClose={backToFeed} />}
         </>
       )}
 

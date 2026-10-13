@@ -1,6 +1,4 @@
 import Icon from '../components/Icon'
-import Avatar from '../components/Avatar'
-import { account } from '../data/account'
 
 // S3: first time only, explains what connecting does
 export default function ConnectDialog({ onAllow, onCancel }) {
@@ -12,20 +10,17 @@ export default function ConnectDialog({ onAllow, onCancel }) {
         </div>
         <h2 className="dialog-title">Connect Google Calendar</h2>
         <p className="dialog-text">
-          Instagram will add events you save to your Google Calendar. It can't see or
-          change your other events.
+          Instagram will add the events you save to your Google Calendar, and only those
+          events.
         </p>
 
         <div className="account-box">
-          <Avatar letter={account.initial} size={36} />
-          <div>
-            <div className="username">{account.name}</div>
-            <div className="subtext">{account.email}</div>
-          </div>
-          <span className="account-lock"><Icon name="lock" size={16} /></span>
+          <span className="account-lock"><Icon name="lock" size={18} /></span>
+          <p className="subtext">Next, you'll sign in with Google and choose what to allow.</p>
         </div>
 
-        <button className="btn btn-google" onClick={onAllow}>Allow</button>
+        {/* this leaves our app and goes to google's real sign in page */}
+        <button className="btn btn-google" onClick={onAllow}>Continue with Google</button>
         <button className="text-btn" onClick={onCancel}>Not now</button>
         <p className="fine-print">You only need to do this once.</p>
       </div>
