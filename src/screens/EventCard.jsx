@@ -1,26 +1,26 @@
 import { useState } from 'react'
 import Icon from '../components/Icon'
 import Sheet from '../components/Sheet'
-import { event } from '../data/event'
+import { eventLabels } from '../utils/eventFormat'
 
 const reminderOptions = ['1 day before', '1 hour before', 'No reminder']
 
 // S2: event details + reminder + add button
-export default function EventCard({ onClose, onAddToCalendar, alreadyAdded, savedReminder }) {
+export default function EventCard({ post, onClose, onAddToCalendar, alreadyAdded, savedReminder }) {
+  const { event, stats } = post
+  const labels = eventLabels(event)
   // which reminder chip is picked, starts on whatever they picked last time
   const [reminder, setReminder] = useState(savedReminder)
-  // bump the count by 1 once you've added it
-  const count = event.addedCount + (alreadyAdded ? 1 : 0)
 
   return (
     <Sheet onClose={onClose}>
       <h2 className="sheet-title">{event.title}</h2>
-      <p className="subtext">Hosted by {event.host}</p>
+      <p className="subtext">Hosted by {post.author}</p>
 
       <ul className="details">
-        <li><Icon name="clock" size={20} /> {event.dateLabel} · {event.time}</li>
-        <li><Icon name="pin" size={20} /> {event.locationFull}</li>
-        <li className="muted"><Icon name="people" size={20} /> {count} people added this event</li>
+        <li><Icon name="clock" size={20} /> {labels.dateLabel} · {labels.timeRange}</li>
+        <li><Icon name="pin" size={20} /> {event.location}</li>
+        <li className="muted"><Icon name="people" size={20} /> {stats.added} people added this event</li>
       </ul>
 
       <hr />
