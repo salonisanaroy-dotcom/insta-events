@@ -8,6 +8,7 @@ export const event = {
   dateLabel: 'Thursday, Oct 15',
   shortDate: 'Thu, Oct 15',
   time: '7:00 to 8:30 PM',
+  startLabel: '7:00 PM',
   location: 'JSOM 1.118',
   locationFull: 'JSOM 1.118, UT Dallas',
   addedCount: 42,
@@ -15,4 +16,8 @@ export const event = {
   likes: 128,
   comments: 12,
   postedAgo: '2 hours ago',
+  // real date + time for google calendar (YYYYMMDDTHHMMSS)
+  start: '20261015T190000',
+  end: '20261015T203000',
+  timeZone: 'America/Chicago',
 }
