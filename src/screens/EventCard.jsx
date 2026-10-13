@@ -6,7 +6,7 @@ import { eventLabels } from '../utils/eventFormat'
 const reminderOptions = ['1 day before', '1 hour before', 'No reminder']
 
 // S2: event details + reminder + add button
-export default function EventCard({ post, onClose, onAddToCalendar, alreadyAdded, savedReminder }) {
+export default function EventCard({ post, onClose, onAddToCalendar, savedReminder }) {
   const { event, stats } = post
   const labels = eventLabels(event)
   // which reminder chip is picked, starts on whatever they picked last time
@@ -39,8 +39,8 @@ export default function EventCard({ post, onClose, onAddToCalendar, alreadyAdded
       </div>
 
       <button className="btn btn-google" onClick={() => onAddToCalendar(reminder)}>
-        <Icon name={alreadyAdded ? 'check' : 'calendar'} size={20} color="white" />
-        {alreadyAdded ? 'Added to Google Calendar' : 'Add to Google Calendar'}
+        <Icon name="calendar" size={20} color="white" />
+        Add to Google Calendar
       </button>
       <button className="link-btn">Other calendars (Apple, Outlook)</button>
     </Sheet>
