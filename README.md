@@ -1,16 +1,26 @@
-# React + Vite
+# Instagram Events → Google Calendar
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A product prototype that adds an **Event tag** to Instagram posts so students can save
+campus events straight to Google Calendar instead of screenshotting flyers and forgetting.
 
-Currently, two official plugins are available:
+Built for the UTD AKPsi PM Career Plan (Fall 2026).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Features
+- Instagram-style feed with event posts and a tappable Event tag
+- Real Google sign-in (OAuth) to connect Google Calendar
+- Creator flow: make a post, add event details, preview, share
+- Live insights: tag taps, calendar adds, and reminder choices (totals only)
+- Edit an event with a confirmation before updating attendees
 
-## React Compiler
+## Tech
+React (Vite), Node.js + Express, Google Calendar API
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Run it locally
+1. `npm install` in the main folder and in `server/`
+2. Create `server/.env` with your own Google OAuth keys:
+   `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
+   `GOOGLE_REDIRECT_URI=http://localhost:3001/auth/google/callback`
+3. Run `npm run dev` in `server/` and in the main folder
+4. Open http://localhost:5173
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+*Concept prototype for a class project. Not affiliated with Instagram, Meta, or Google.*
