@@ -33,6 +33,7 @@ export default function App() {
   const [draft, setDraft] = useState(blankDraft) // the post being created
   const [formReturn, setFormReturn] = useState('newPost') // where the event form goes back to
   const [toast, setToast] = useState('') // popup message at the bottom
+  const [calendarWarning, setCalendarWarning] = useState(false) // they unchecked the calendar box
   const [googleResult, setGoogleResult] = useState({ status: 'loading' }) // how the google add went
   const [calendar, setCalendar] = useState(() => load('calendar', 'google')) // google, apple, or outlook
   const [showIntro, setShowIntro] = useState(() => !load('seenIntro', false)) // first visit walkthrough
@@ -60,8 +61,9 @@ export default function App() {
         })
         .catch((err) => {
           if (err.notConnected) {
-            // their login is gone, so connect again
+            // their login is gone (or missing calendar access), so connect again
             setMe({ connected: false })
+            setCalendarWarning(err.needsCalendar)
             setScreen('connect')
           } else {
             setGoogleResult({ status: 'error' })
@@ -96,6 +98,15 @@ export default function App() {
           } else {
             setToast('Connected to Google Calendar')
           }
+        } else if (params.get('connected') === 'nocalendar') {
+          // they signed in but unchecked calendar access. reopen the connect popup with a tip
+          const post = pending && feed.find((p) => p.id === pending.postId)
+          if (post) {
+            setActiveId(post.id)
+            setReminder(pending.reminder)
+          }
+          setCalendarWarning(true)
+          setScreen('connect')
         } else if (params.get('connected') === '0') {
           setToast('Google sign in was canceled')
         }
@@ -326,7 +337,9 @@ export default function App() {
               savedCalendar={calendar}
             />
           )}
-          {screen === 'connect' && <ConnectDialog onAllow={goToGoogle} onCancel={backToFeed} />}
+          {screen === 'connect' && (
+            <ConnectDialog warning={calendarWarning} onAllow={goToGoogle} onCancel={backToFeed} />
+          )}
           {screen === 'added' && activePost && (
             <AddedSheet
               post={activePost}

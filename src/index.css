@@ -1377,3 +1377,15 @@ button.more {
   background: #ed4956;
   color: white;
 }
+
+/* ---------- connect: they unchecked calendar access ---------- */
+.dialog-warning {
+  background: #fff4e5;
+  color: #8a4b00;
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin: 4px 0 12px;
+  text-align: left;
+}

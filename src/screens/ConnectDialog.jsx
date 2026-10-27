@@ -1,7 +1,7 @@
 import Icon from '../components/Icon'
 
 // S3: first time only, explains what connecting does
-export default function ConnectDialog({ onAllow, onCancel }) {
+export default function ConnectDialog({ warning, onAllow, onCancel }) {
   return (
     <div className="overlay center" onClick={onCancel}>
       <div className="dialog" onClick={(e) => e.stopPropagation()}>
@@ -13,6 +13,14 @@ export default function ConnectDialog({ onAllow, onCancel }) {
           Instagram will add the events you save to your Google Calendar, and only those
           events.
         </p>
+
+        {/* they unchecked the calendar box last time */}
+        {warning && (
+          <p className="dialog-warning">
+            Calendar access wasn't allowed last time. On Google's screen, make sure the box for
+            calendar events is <strong>checked</strong>.
+          </p>
+        )}
 
         <div className="account-box">
           <span className="account-lock"><Icon name="lock" size={18} /></span>

@@ -206,6 +206,12 @@ app.get('/auth/google/callback', safe(async (req, res) => {
   try {
     const client = makeClient()
     const { tokens } = await client.getToken(code) // trade the code for real keys
+
+    // google lets people uncheck the calendar box. without it we can't add anything, so make them redo it
+    if (!tokens.scope?.includes('https://www.googleapis.com/auth/calendar.events')) {
+      console.log('signed in without calendar access, asking again')
+      return res.redirect(`${FRONTEND_URL}/?connected=nocalendar`)
+    }
     client.setCredentials(tokens)
     const { data: profile } = await google.oauth2({ version: 'v2', auth: client }).userinfo.get()
 
@@ -315,6 +321,12 @@ app.post('/api/calendar/add', safe(async (req, res) => {
     res.json({ link, post: await toPost(row, user) })
   } catch (err) {
     console.error('adding to calendar failed:', err.message)
+    // they took away calendar access (or never gave it): sign them out so they connect again
+    if (err.code === 401 || /insufficient|invalid_grant/i.test(err.message)) {
+      const { sid } = readCookies(req)
+      await run('DELETE FROM sessions WHERE id = ?', sid)
+      return res.status(401).json({ error: 'Calendar access is missing', needsCalendar: true })
+    }
     res.status(500).json({ error: err.message })
   }
 }))

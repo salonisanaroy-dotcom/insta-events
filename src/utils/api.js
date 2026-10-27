@@ -10,6 +10,7 @@ async function request(method, url, body) {
   if (res.status === 401) {
     const err = new Error('Not connected to Google')
     err.notConnected = true // signed out or login expired
+    err.needsCalendar = Boolean(data.needsCalendar) // signed in, but didn't allow calendar access
     throw err
   }
   if (!res.ok) throw new Error(data.error || 'Something went wrong')
