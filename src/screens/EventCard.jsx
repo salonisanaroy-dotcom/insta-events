@@ -2,15 +2,18 @@ import { useState } from 'react'
 import Icon from '../components/Icon'
 import Sheet from '../components/Sheet'
 import { eventLabels } from '../utils/eventFormat'
+import { calendars } from '../data/calendars'
 
 const reminderOptions = ['1 day before', '1 hour before', 'No reminder']
 
-// S2: event details + reminder + add button
-export default function EventCard({ post, onClose, onAddToCalendar, savedReminder }) {
+// S2: event details, reminder, and which calendar to add it to
+export default function EventCard({ post, onClose, onAddToCalendar, savedReminder, savedCalendar }) {
   const { event, stats } = post
   const labels = eventLabels(event)
-  // which reminder chip is picked, starts on whatever they picked last time
+  // both start on whatever they picked last time
   const [reminder, setReminder] = useState(savedReminder)
+  const [calendar, setCalendar] = useState(savedCalendar)
+  const picked = calendars[calendar]
 
   return (
     <Sheet onClose={onClose}>
@@ -25,7 +28,7 @@ export default function EventCard({ post, onClose, onAddToCalendar, savedReminde
 
       <hr />
 
-      <p className="section-label">Google Calendar reminder</p>
+      <p className="section-label">Reminder</p>
       <div className="chips">
         {reminderOptions.map((option) => (
           <button
@@ -38,11 +41,29 @@ export default function EventCard({ post, onClose, onAddToCalendar, savedReminde
         ))}
       </div>
 
-      <button className="btn btn-google" onClick={() => onAddToCalendar(reminder)}>
+      <p className="section-label">Add to</p>
+      {/* google, apple, or outlook */}
+      <div className="calendar-picker">
+        {Object.entries(calendars).map(([key, cal]) => (
+          <button
+            key={key}
+            className={key === calendar ? 'cal-option selected' : 'cal-option'}
+            onClick={() => setCalendar(key)}
+          >
+            <Icon name="calendar" size={18} color={cal.color} />
+            {cal.short}
+          </button>
+        ))}
+      </div>
+
+      <button
+        className="btn"
+        style={{ background: picked.color }}
+        onClick={() => onAddToCalendar(reminder, calendar)}
+      >
         <Icon name="calendar" size={20} color="white" />
-        Add to Google Calendar
+        Add to {picked.name}
       </button>
-      <button className="link-btn">Other calendars (Apple, Outlook)</button>
     </Sheet>
   )
 }

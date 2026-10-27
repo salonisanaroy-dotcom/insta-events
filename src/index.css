@@ -1120,3 +1120,235 @@ a.btn {
   margin: 18px 0 8px;
   font-size: 15px;
 }
+
+/* ================= v2: feedback fixes ================= */
+
+/* ---------- calendar picker ---------- */
+.calendar-picker {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.cal-option {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 0;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cal-option.selected {
+  border-color: var(--black);
+  background: #fafafa;
+}
+
+.btn-dark {
+  background: var(--black);
+}
+
+.prompt-btn {
+  margin-top: 16px;
+}
+
+/* ---------- first time tooltip ---------- */
+.tag-tip {
+  position: absolute;
+  left: 12px;
+  bottom: 62px;
+  max-width: 250px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 10px 10px 12px;
+  background: #262626;
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  text-align: left;
+  border-radius: 10px;
+  z-index: 2;
+  animation: fade-in-tip 0.3s ease-out;
+}
+
+/* the little triangle pointing down at the tag */
+.tag-tip::after {
+  content: '';
+  position: absolute;
+  left: 24px;
+  bottom: -6px;
+  border: 6px solid transparent;
+  border-bottom: none;
+  border-top-color: #262626;
+}
+
+@keyframes fade-in-tip {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* soft glow so the tag catches your eye */
+.event-tag.pulse {
+  animation: pulse 1.6s ease-out infinite;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.8); }
+  100% { box-shadow: 0 0 0 12px rgba(255, 255, 255, 0); }
+}
+
+/* ---------- what's new walkthrough ---------- */
+.onboarding {
+  position: absolute;
+  inset: 0;
+  background: white;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 28px 48px;
+  text-align: center;
+  animation: fade-in-tip 0.25s ease-out;
+}
+
+.onboarding-skip {
+  align-self: flex-end;
+  color: var(--gray);
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.onboarding-art {
+  height: 260px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 24px 0 28px;
+}
+
+.mini-flyer {
+  position: relative;
+  width: 240px;
+  height: 240px;
+  border-radius: 16px;
+  background: linear-gradient(90deg, #4b1e78, #2f6fdb);
+  color: white;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding-bottom: 30px;
+}
+
+.mini-flyer p {
+  font-size: 22px;
+  font-weight: 700;
+  width: 160px;
+  line-height: 26px;
+}
+
+.mini-flyer span {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.mini-cals {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  width: 200px;
+}
+
+.mini-cals .chip {
+  align-self: center;
+  margin-top: 6px;
+}
+
+.onboarding-title {
+  font-size: 24px;
+  margin-bottom: 12px;
+}
+
+.onboarding-text {
+  color: var(--gray);
+  font-size: 16px;
+  line-height: 23px;
+}
+
+.onboarding-note {
+  margin-top: 14px;
+  font-size: 14px;
+  color: #1f4e79;
+  background: #f2f8ff;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.dots {
+  display: flex;
+  gap: 6px;
+  margin-top: auto;
+  margin-bottom: 18px;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--line);
+}
+
+.dot.active {
+  background: var(--ig-blue);
+}
+
+.onboarding-btn {
+  width: 100%;
+}
+
+.settings-label {
+  margin-top: 16px;
+}
+
+/* example text in empty boxes: lighter + italic so it doesn't look filled in */
+.field input::placeholder {
+  color: #b8b8b8;
+  font-style: italic;
+}
+
+/* empty date + time boxes look faded too, until you pick something */
+.field input[type='date']:invalid,
+.field input[type='time']:invalid {
+  color: #b8b8b8;
+}
+
+.form-intro {
+  font-size: 14px;
+  color: var(--gray);
+  line-height: 20px;
+  margin-bottom: 16px;
+}
+
+/* ================= day 3: loading spinner ================= */
+.spinner {
+  width: 44px;
+  height: 44px;
+  margin: 14px auto 18px;
+  border-radius: 50%;
+  border: 4px solid #e8f0fe;
+  border-top-color: var(--google-blue);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

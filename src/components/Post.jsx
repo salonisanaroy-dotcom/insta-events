@@ -3,7 +3,7 @@ import Avatar from './Avatar'
 import Flyer from './Flyer'
 
 // one post in the feed
-export default function Post({ post, onOpenEvent, onInsights }) {
+export default function Post({ post, onOpenEvent, onInsights, onBookmark, showTip, onDismissTip }) {
   return (
     <article className="post">
       <div className="post-header">
@@ -15,7 +15,7 @@ export default function Post({ post, onOpenEvent, onInsights }) {
         <span className="more">•••</span>
       </div>
 
-      <Flyer post={post} onOpenEvent={onOpenEvent} />
+      <Flyer post={post} onOpenEvent={onOpenEvent} showTip={showTip} onDismissTip={onDismissTip} />
 
       {/* your own posts get an insights bar, like real instagram */}
       <button className="insights-bar" onClick={onInsights}>
@@ -29,7 +29,10 @@ export default function Post({ post, onOpenEvent, onInsights }) {
           <Icon name="comment" size={24} />
           <Icon name="send" size={24} />
         </div>
-        <Icon name="bookmark" size={24} />
+        {/* bookmark fills in black once saved */}
+        <button onClick={onBookmark} aria-label={post.savedByMe ? 'Unsave' : 'Save'}>
+          <Icon name="bookmark" size={24} fill={post.savedByMe ? 'black' : 'none'} />
+        </button>
       </div>
 
       <div className="post-text">

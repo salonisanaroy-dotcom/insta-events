@@ -6,12 +6,17 @@ import EventCard from './screens/EventCard'
 import ConnectDialog from './screens/ConnectDialog'
 import AddedSheet from './screens/AddedSheet'
 import AccountSheet from './screens/AccountSheet'
+import SavePrompt from './screens/SavePrompt'
+import Onboarding from './screens/Onboarding'
 import NewPost from './screens/creator/NewPost'
 import EventForm from './screens/creator/EventForm'
 import ReviewPost from './screens/creator/ReviewPost'
 import Insights from './screens/creator/Insights'
 import { initialPosts, flyerColors, emptyStats } from './data/posts'
 import { plural } from './utils/eventFormat'
+import { downloadIcs } from './utils/icsFile'
+import { sendToGoogle, updateInGoogle } from './utils/api'
+import { load, save } from './utils/storage'
 
 // a fresh, empty post being made
 const blankDraft = { caption: '', imageUrl: null, event: null }
@@ -26,6 +31,10 @@ export default function App() {
   const [draft, setDraft] = useState(blankDraft) // the post being created
   const [formReturn, setFormReturn] = useState('newPost') // where the event form goes back to
   const [toast, setToast] = useState('') // popup message at the bottom
+  const [googleResult, setGoogleResult] = useState({ status: 'loading' }) // how the google add went
+  const [calendar, setCalendar] = useState(() => load('calendar', 'google')) // google, apple, or outlook
+  const [showIntro, setShowIntro] = useState(() => !load('seenIntro', false)) // first visit walkthrough
+  const [showTip, setShowTip] = useState(() => !load('seenTip', false)) // tooltip on the first event tag
 
   const activePost = posts.find((p) => p.id === activeId)
   const backToFeed = () => setScreen('feed')
@@ -37,7 +46,7 @@ export default function App() {
   }
 
   // count an add once per post, then bump the insights numbers
-  const recordAdd = useCallback((id, choice) => {
+  const recordAdd = useCallback((id, choice, cal) => {
     setPosts((prev) =>
       prev.map((p) => {
         if (p.id !== id || p.addedByMe) return p // not this post, or already counted
@@ -45,6 +54,7 @@ export default function App() {
         return {
           ...p,
           addedByMe: true,
+          addedTo: cal, // google, apple, or outlook (so edits know to update google)
           stats: {
             ...s,
             added: s.added + 1,
@@ -55,6 +65,29 @@ export default function App() {
       }),
     )
   }, [])
+
+  // ask the server to put the event in their real google calendar
+  const addToGoogle = useCallback(
+    (post, choice) => {
+      setGoogleResult({ status: 'loading' })
+      setScreen('added') // shows the spinner while we wait
+      sendToGoogle(post, choice)
+        .then((data) => {
+          recordAdd(post.id, choice, 'google')
+          setGoogleResult({ status: 'done', link: data.link })
+        })
+        .catch((err) => {
+          if (err.notConnected) {
+            // their login is gone, so connect again
+            setMe({ connected: false })
+            setScreen('connect')
+          } else {
+            setGoogleResult({ status: 'error' })
+          }
+        })
+    },
+    [recordAdd],
+  )
 
   // ---------- when the app first loads ----------
   useEffect(() => {
@@ -70,10 +103,16 @@ export default function App() {
 
         if (params.get('connected') === '1' && data.connected && pending) {
           // finish the add they started before leaving for google
-          setActiveId(pending.postId)
-          setReminder(pending.reminder)
-          recordAdd(pending.postId, pending.reminder)
-          setScreen('added')
+          // (new posts don't survive the reload yet, so look in the starting posts)
+          const post = initialPosts.find((p) => p.id === pending.postId)
+          if (post) {
+            setActiveId(post.id)
+            setReminder(pending.reminder)
+            setCalendar('google')
+            addToGoogle(post, pending.reminder)
+          } else {
+            setToast('Connected to Google Calendar')
+          }
         } else if (params.get('connected') === '0') {
           setToast('Google sign in was canceled')
         }
@@ -82,23 +121,67 @@ export default function App() {
         if (params.has('connected')) window.history.replaceState({}, '', '/') // clean up the url
       })
       .catch(() => setMe({ connected: false, offline: true })) // server isn't running
-  }, [recordAdd])
+  }, [addToGoogle])
+
+  // ---------- first time help ----------
+  function finishIntro() {
+    setShowIntro(false)
+    save('seenIntro', true) // don't show it again next visit
+  }
+
+  function replayIntro() {
+    setScreen('feed')
+    setShowIntro(true)
+    setShowTip(true) // bring the tooltip back too
+    save('seenTip', false)
+  }
+
+  function dismissTip() {
+    setShowTip(false)
+    save('seenTip', true)
+  }
+
+  function changeCalendar(key) {
+    setCalendar(key)
+    save('calendar', key) // remember their pick for next time
+  }
 
   // ---------- student side ----------
   function openEvent(id) {
+    if (showTip) dismissTip() // they found the tag, tip did its job
     setActiveId(id)
     setScreen('eventCard')
     updateStats(id, (s) => ({ ...s, tagTaps: s.tagTaps + 1 })) // counts toward insights
   }
 
-  function handleAdd(choice) {
+  function handleAdd(choice, cal) {
     setReminder(choice)
-    // already signed in? one tap. if not, connect google first
-    if (me.connected) {
-      recordAdd(activeId, choice)
+    changeCalendar(cal)
+
+    // apple + outlook: download an event file, no sign in needed
+    if (cal !== 'google') {
+      downloadIcs(activePost, choice)
+      recordAdd(activeId, choice, cal)
       setScreen('added')
+      return
+    }
+
+    // google: already signed in? the server adds it right away. if not, connect first
+    if (me.connected) {
+      addToGoogle(activePost, choice)
     } else {
       setScreen('connect')
+    }
+  }
+
+  // bookmark a post, and nudge them if it has an event
+  function toggleBookmark(id) {
+    const post = posts.find((p) => p.id === id)
+    const nowSaved = !post.savedByMe
+    setPosts((prev) => prev.map((p) => (p.id === id ? { ...p, savedByMe: nowSaved } : p)))
+    if (nowSaved && post.event && !post.addedByMe) {
+      setActiveId(id)
+      setScreen('savePrompt')
     }
   }
 
@@ -155,10 +238,16 @@ export default function App() {
   }
 
   function saveEdit(event) {
-    setPosts((prev) => prev.map((p) => (p.id === activeId ? { ...p, event } : p)))
+    const updated = { ...activePost, event }
+    setPosts((prev) => prev.map((p) => (p.id === activeId ? updated : p)))
     const n = activePost.stats.added
     setToast(n > 0 && event.autoUpdate ? `Event updated · ${plural(n, 'calendar')} updated` : 'Event updated')
     setScreen('insights')
+
+    // if you added it to google yourself, really update it there too
+    if (event.autoUpdate && updated.addedTo === 'google') {
+      updateInGoogle(updated).catch(() => setToast("Event updated, but your Google Calendar couldn't be updated"))
+    }
   }
 
   // ---------- full page screens ----------
@@ -206,6 +295,10 @@ export default function App() {
             onInsights={openInsights}
             onCreate={startPost}
             onAccount={() => setScreen('account')}
+            onBookmark={toggleBookmark}
+            showTip={showTip && !showIntro && screen === 'feed'} // hide it under pop-ups
+            onDismissTip={dismissTip}
+            onHelp={replayIntro}
           />
 
           {screen === 'eventCard' && activePost && (
@@ -213,17 +306,45 @@ export default function App() {
               post={activePost}
               onClose={backToFeed}
               onAddToCalendar={handleAdd}
-              alreadyAdded={activePost.addedByMe}
               savedReminder={reminder}
+              savedCalendar={calendar}
             />
           )}
           {screen === 'connect' && <ConnectDialog onAllow={goToGoogle} onCancel={backToFeed} />}
           {screen === 'added' && activePost && (
-            <AddedSheet post={activePost} reminder={reminder} email={me.email} onDone={backToFeed} />
+            <AddedSheet
+              post={activePost}
+              reminder={reminder}
+              calendar={calendar}
+              email={me.email}
+              result={googleResult}
+              onDone={backToFeed}
+            />
           )}
-          {screen === 'account' && <AccountSheet me={me} onClose={backToFeed} />}
+          {screen === 'account' && (
+            <AccountSheet
+              me={me}
+              calendar={calendar}
+              onChangeCalendar={changeCalendar}
+              onReplay={replayIntro}
+              onClose={backToFeed}
+            />
+          )}
+          {screen === 'savePrompt' && activePost && (
+            <SavePrompt
+              post={activePost}
+              onAdd={() => {
+                if (showTip) dismissTip() // they're adding it, no need for the tip
+                setScreen('eventCard')
+              }}
+              onClose={backToFeed}
+            />
+          )}
         </>
       )}
+
+      {/* walkthrough sits on top of everything */}
+      {showIntro && <Onboarding onFinish={finishIntro} />}
 
       {toast && <Toast message={toast} onDone={clearToast} />}
     </PhoneFrame>

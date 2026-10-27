@@ -83,4 +83,106 @@ app.get('/auth/logout', (req, res) => {
   res.redirect(FRONTEND_URL)
 })
 
+// ================= day 3: add events to google calendar =================
+
+// a google client that's already signed in as the saved user
+function signedInClient() {
+  const login = loadLogin()
+  if (!login) return null
+  const client = makeClient()
+  client.setCredentials(login.tokens)
+  // login keys expire after about an hour, google sends fresh ones, so save them
+  client.on('tokens', (fresh) => {
+    const current = loadLogin()
+    if (current) saveLogin({ ...current, tokens: { ...current.tokens, ...fresh } })
+  })
+  return { client, login }
+}
+
+// reminder chip -> minutes before the event
+const reminderMinutes = { '1 day before': 24 * 60, '1 hour before': 60 }
+
+// each account always gets the same google calendar color (google has colors 1 to 11)
+function colorFor(author) {
+  const total = [...author].reduce((sum, letter) => sum + letter.charCodeAt(0), 0)
+  return String((total % 11) + 1)
+}
+
+// our post -> the shape google calendar wants
+function toGoogleEvent(post, reminder) {
+  const { event } = post
+  const minutes = reminderMinutes[reminder] // undefined for "no reminder"
+  return {
+    summary: event.title,
+    location: event.location,
+    description: `Added from Instagram (@${post.author})\nView post: ${FRONTEND_URL}`,
+    start: { dateTime: `${event.date}T${event.startTime}:00`, timeZone: 'America/Chicago' },
+    end: { dateTime: `${event.date}T${event.endTime}:00`, timeZone: 'America/Chicago' },
+    colorId: colorFor(post.author),
+    reminders: {
+      useDefault: false, // use our reminder, not their calendar's default
+      overrides: minutes ? [{ method: 'popup', minutes }] : [],
+    },
+  }
+}
+
+// adds the event, or updates it if this person already added it (no duplicates)
+async function saveToCalendar(signedIn, post, reminder) {
+  const calendar = google.calendar({ version: 'v3', auth: signedIn.client })
+  const added = signedIn.login.added ?? {} // post id -> google event id
+  const existing = added[post.id]
+  const requestBody = toGoogleEvent(post, reminder)
+
+  let result
+  if (existing) {
+    try {
+      result = await calendar.events.patch({ calendarId: 'primary', eventId: existing.eventId, requestBody })
+    } catch (err) {
+      // they deleted it from their calendar, so just add it again
+      if (err.code !== 404 && err.code !== 410) throw err
+    }
+  }
+  if (!result) {
+    result = await calendar.events.insert({ calendarId: 'primary', requestBody })
+  }
+
+  // remember which google event belongs to which post
+  const latest = loadLogin()
+  saveLogin({ ...latest, added: { ...(latest.added ?? {}), [post.id]: { eventId: result.data.id, reminder } } })
+  return result.data
+}
+
+// student taps "add to google calendar"
+app.post('/api/calendar/add', async (req, res) => {
+  const signedIn = signedInClient()
+  if (!signedIn) return res.status(401).json({ error: 'Not connected to Google' })
+
+  try {
+    const { post, reminder } = req.body
+    const saved = await saveToCalendar(signedIn, post, reminder)
+    console.log(`added "${post.event.title}" to ${signedIn.login.email}'s calendar`)
+    res.json({ ok: true, link: saved.htmlLink }) // link straight to the event in google calendar
+  } catch (err) {
+    console.error('adding to calendar failed:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// organizer edits an event: update it in the calendar of whoever added it
+app.post('/api/calendar/update', async (req, res) => {
+  const signedIn = signedInClient()
+  const { post } = req.body
+  const existing = signedIn?.login.added?.[post.id]
+  if (!existing) return res.json({ updated: false }) // nobody here added it, nothing to do
+
+  try {
+    await saveToCalendar(signedIn, post, existing.reminder) // keep the reminder they picked
+    console.log(`updated "${post.event.title}" in ${signedIn.login.email}'s calendar`)
+    res.json({ updated: true })
+  } catch (err) {
+    console.error('updating calendar failed:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
 app.listen(PORT, () => console.log(`server running on http://localhost:${PORT}`))

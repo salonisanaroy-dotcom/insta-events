@@ -66,25 +66,29 @@ export default function EventForm({ initial, mode = 'create', addedCount = 0, on
       />
 
       <div className="page-body">
+        {/* says up front that these boxes are for them to fill in */}
+        {mode === 'create' && (
+          <p className="form-intro">Fill in your event's details. Students will see these when they tap the tag.</p>
+        )}
         <Field label="Event name" error={errors.title}>
-          <input value={form.title} onChange={(e) => update('title', e.target.value)} placeholder="AKPsi General Body Meeting" />
+          <input value={form.title} onChange={(e) => update('title', e.target.value)} placeholder="e.g. General Body Meeting" />
         </Field>
         <Field label="Short name for the tag (optional)">
-          <input value={form.shortTitle} maxLength={16} onChange={(e) => update('shortTitle', e.target.value)} placeholder="GBM" />
+          <input value={form.shortTitle} maxLength={16} onChange={(e) => update('shortTitle', e.target.value)} placeholder="e.g. GBM" />
         </Field>
         <Field label="Date" error={errors.date}>
-          <input type="date" value={form.date} onChange={(e) => update('date', e.target.value)} />
+          <input type="date" required value={form.date} onChange={(e) => update('date', e.target.value)} />
         </Field>
         <div className="field-row">
           <Field label="Starts" error={errors.startTime}>
-            <input type="time" value={form.startTime} onChange={(e) => update('startTime', e.target.value)} />
+            <input type="time" required value={form.startTime} onChange={(e) => update('startTime', e.target.value)} />
           </Field>
           <Field label="Ends" error={errors.endTime}>
-            <input type="time" value={form.endTime} onChange={(e) => update('endTime', e.target.value)} />
+            <input type="time" required value={form.endTime} onChange={(e) => update('endTime', e.target.value)} />
           </Field>
         </div>
         <Field label="Location" error={errors.location}>
-          <input value={form.location} onChange={(e) => update('location', e.target.value)} placeholder="JSOM 1.118, UT Dallas" />
+          <input value={form.location} onChange={(e) => update('location', e.target.value)} placeholder="e.g. JSOM 1.118, UT Dallas" />
         </Field>
 
         <div className="toggle-row">

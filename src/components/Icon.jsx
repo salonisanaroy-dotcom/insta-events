@@ -23,12 +23,14 @@ const paths = {
   music: <><path d="M9 18V5l11-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="17" cy="16" r="3" /></>,
   eye: <><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></>,
   chart: <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />,
+  x: <path d="M6 6l12 12M18 6L6 18" />,
+  help: <><circle cx="12" cy="12" r="9" /><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 17h.01" /></>,
   image: <><rect x="3" y="3" width="18" height="18" rx="3" /><circle cx="9" cy="9" r="2" /><path d="M21 15l-5-5L5 21" /></>,
 }
 
-export default function Icon({ name, size = 24, color = 'currentColor' }) {
+export default function Icon({ name, size = 24, color = 'currentColor', fill = 'none' }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={fill}
       stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       {paths[name]}
     </svg>

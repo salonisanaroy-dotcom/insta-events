@@ -2,12 +2,17 @@ import Icon from '../components/Icon'
 import Post from '../components/Post'
 
 // S1: instagram home feed
-export default function Feed({ posts, onOpenEvent, onInsights, onCreate, onAccount }) {
+export default function Feed({ posts, onOpenEvent, onInsights, onCreate, onAccount, onBookmark, showTip, onDismissTip, onHelp }) {
+  // the tip only goes on the first post that has an event
+  const tipPostId = posts.find((p) => p.event)?.id
+
   return (
     <div className="feed">
       <header className="ig-header">
         <h1 className="ig-logo">Instagram</h1>
         <div className="icon-row">
+          {/* replays the "what's new" walkthrough */}
+          <button onClick={onHelp} aria-label="How it works"><Icon name="help" size={24} /></button>
           <Icon name="heart" size={26} />
           <Icon name="send" size={24} />
         </div>
@@ -21,6 +26,9 @@ export default function Feed({ posts, onOpenEvent, onInsights, onCreate, onAccou
             post={post}
             onOpenEvent={() => onOpenEvent(post.id)}
             onInsights={() => onInsights(post.id)}
+            onBookmark={() => onBookmark(post.id)}
+            showTip={showTip && post.id === tipPostId}
+            onDismissTip={onDismissTip}
           />
         ))}
       </div>

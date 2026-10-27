@@ -1,9 +1,10 @@
 import Icon from './Icon'
 
 // the white pill on the flyer, tapping it opens the event card
-export default function EventTag({ label, onClick }) {
+export default function EventTag({ label, onClick, pulse = false }) {
   return (
-    <button className="event-tag" onClick={onClick}>
+    // pulse = gentle glow so first time users notice it
+    <button className={pulse ? 'event-tag pulse' : 'event-tag'} onClick={onClick}>
       <Icon name="calendar" size={16} />
       <span>{label}</span>
       <Icon name="chevronRight" size={14} />
