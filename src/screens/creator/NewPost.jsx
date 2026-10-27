@@ -65,7 +65,7 @@ export default function NewPost({ draft, setDraft, onCancel, onAddEvent, onNext 
 
         <div className="tip">
           <Icon name="calendar" size={20} />
-          <p>Add Event lets students save this post straight to their Google Calendar in one tap.</p>
+          <p>Add Event lets students save this post straight to their calendar (Google, Apple, or Outlook) in one tap.</p>
         </div>
       </div>
     </div>
