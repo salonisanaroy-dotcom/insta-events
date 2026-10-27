@@ -7,6 +7,7 @@ import ConnectDialog from './screens/ConnectDialog'
 import AddedSheet from './screens/AddedSheet'
 import AccountSheet from './screens/AccountSheet'
 import SavePrompt from './screens/SavePrompt'
+import DeletePost from './screens/DeletePost'
 import Onboarding from './screens/Onboarding'
 import NewPost from './screens/creator/NewPost'
 import EventForm from './screens/creator/EventForm'
@@ -15,7 +16,7 @@ import Insights from './screens/creator/Insights'
 import { flyerColors, emptyStats } from './data/posts'
 import { plural } from './utils/eventFormat'
 import { downloadIcs } from './utils/icsFile'
-import { getMe, getPosts, createPost, tapEventTag, countAdd, sendToGoogle, saveEvent } from './utils/api'
+import { getMe, getPosts, createPost, tapEventTag, countAdd, sendToGoogle, saveEvent, deletePost } from './utils/api'
 import { load, save } from './utils/storage'
 
 // a fresh, empty post being made
@@ -245,6 +246,23 @@ export default function App() {
       .catch(() => setToast("Couldn't save. Is the server running?"))
   }
 
+  function openDelete(id) {
+    setActiveId(id)
+    setScreen('deletePost')
+  }
+
+  function confirmDelete() {
+    const id = activeId
+    setScreen('feed')
+    setToast('Deleting...')
+    deletePost(id)
+      .then(({ removed }) => {
+        setPosts((prev) => prev.filter((p) => p.id !== id)) // gone from the feed
+        setToast(removed > 0 ? `Post deleted · removed from ${plural(removed, 'Google Calendar')}` : 'Post deleted')
+      })
+      .catch(() => setToast("Couldn't delete. Is the server running?"))
+  }
+
   // ---------- full page screens ----------
   const pages = {
     newPost: (
@@ -293,6 +311,7 @@ export default function App() {
             onCreate={startPost}
             onAccount={() => setScreen('account')}
             onBookmark={toggleBookmark}
+            onMore={openDelete}
             showTip={showTip && !showIntro && screen === 'feed'} // hide it under pop-ups
             onDismissTip={dismissTip}
             onHelp={replayIntro}
@@ -326,6 +345,9 @@ export default function App() {
               onReplay={replayIntro}
               onClose={backToFeed}
             />
+          )}
+          {screen === 'deletePost' && activePost && (
+            <DeletePost post={activePost} onDelete={confirmDelete} onCancel={backToFeed} />
           )}
           {screen === 'savePrompt' && activePost && (
             <SavePrompt

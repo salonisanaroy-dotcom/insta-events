@@ -2,7 +2,7 @@ import Icon from '../components/Icon'
 import Post from '../components/Post'
 
 // S1: instagram home feed
-export default function Feed({ posts, loading, offline, onOpenEvent, onInsights, onCreate, onAccount, onBookmark, showTip, onDismissTip, onHelp }) {
+export default function Feed({ posts, loading, offline, onOpenEvent, onInsights, onMore, onCreate, onAccount, onBookmark, showTip, onDismissTip, onHelp }) {
   // the tip only goes on the first post that has an event
   const tipPostId = posts.find((p) => p.event)?.id
 
@@ -26,6 +26,9 @@ export default function Feed({ posts, loading, offline, onOpenEvent, onInsights,
             Can't reach the server.<br />Run <code>npm run dev</code> in the server folder, then refresh.
           </p>
         )}
+        {!loading && !offline && posts.length === 0 && (
+          <p className="feed-empty">No posts yet. Tap + to make one.</p>
+        )}
         {posts.map((post) => (
           <Post
             key={post.id}
@@ -33,6 +36,7 @@ export default function Feed({ posts, loading, offline, onOpenEvent, onInsights,
             onOpenEvent={() => onOpenEvent(post.id)}
             onInsights={() => onInsights(post.id)}
             onBookmark={() => onBookmark(post.id)}
+            onMore={() => onMore(post.id)}
             showTip={showTip && post.id === tipPostId}
             onDismissTip={onDismissTip}
           />

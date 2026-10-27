@@ -339,4 +339,39 @@ app.put('/api/posts/:id/event', async (req, res) => {
   res.json({ post: toPost(findPost(row.id), currentUser(req)), updated, failed })
 })
 
+// organizer deletes a post. if auto updates are on, the event also leaves everyone's google calendar
+app.delete('/api/posts/:id', async (req, res) => {
+  const row = findPost(req.params.id)
+  if (!row) return res.status(404).json({ error: 'No such post' })
+  const event = row.event ? JSON.parse(row.event) : null
+
+  let removed = 0
+  if (event?.autoUpdate) {
+    const people = db.prepare(`
+      SELECT users.*, adds.google_event_id FROM adds
+      JOIN users ON users.id = adds.user_id
+      WHERE adds.post_id = ? AND adds.google_event_id IS NOT NULL`).all(row.id)
+
+    const results = await Promise.allSettled(
+      people.map(async (person) => {
+        try {
+          await googleFor(person).events.delete({ calendarId: 'primary', eventId: person.google_event_id })
+        } catch (err) {
+          if (err.code !== 404 && err.code !== 410) throw err // already gone from their calendar = fine
+        }
+      }),
+    )
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled') removed++
+      else console.error(`couldn't remove it from ${people[i].email}'s calendar:`, r.reason.message)
+    })
+  }
+
+  // remove the post and its adds from the database
+  db.prepare('DELETE FROM adds WHERE post_id = ?').run(row.id)
+  db.prepare('DELETE FROM posts WHERE id = ?').run(row.id)
+  console.log(`deleted post #${row.id}${event ? ` ("${event.title}"), removed from ${removed} Google Calendar(s)` : ''}`)
+  res.json({ removed })
+})
+
 app.listen(PORT, () => console.log(`server running on http://localhost:${PORT}`))

@@ -36,3 +36,6 @@ export const sendToGoogle = (id, reminder) => request('POST', '/api/calendar/add
 
 // organizer saves an edit -> { post, updated, failed } (updated = google calendars changed)
 export const saveEvent = (id, event) => request('PUT', `/api/posts/${id}/event`, { event })
+
+// organizer deletes a post -> { removed } (google calendars it was taken out of)
+export const deletePost = (id) => request('DELETE', `/api/posts/${id}`)

@@ -3,7 +3,7 @@ import Avatar from './Avatar'
 import Flyer from './Flyer'
 
 // one post in the feed
-export default function Post({ post, onOpenEvent, onInsights, onBookmark, showTip, onDismissTip }) {
+export default function Post({ post, onOpenEvent, onInsights, onBookmark, onMore, showTip, onDismissTip }) {
   return (
     <article className="post">
       <div className="post-header">
@@ -12,7 +12,7 @@ export default function Post({ post, onOpenEvent, onInsights, onBookmark, showTi
           <div className="username">{post.author}</div>
           <div className="subtext">{post.school}</div>
         </div>
-        <span className="more">•••</span>
+        <button className="more" onClick={onMore} aria-label="More options">•••</button>
       </div>
 
       <Flyer post={post} onOpenEvent={onOpenEvent} showTip={showTip} onDismissTip={onDismissTip} />

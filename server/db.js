@@ -5,6 +5,9 @@ import { seedPosts, seedAdds } from './seed.js'
 
 export const db = new DatabaseSync('./insta.db') // makes the file the first time
 
+// is this a brand new database? (checked before we make the tables)
+const isNew = !db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'posts'").get()
+
 // the tables (like sheets in a spreadsheet). "if not exists" = only the first time
 db.exec(`
   -- everyone who signed in with google
@@ -56,8 +59,8 @@ db.exec(`
 `)
 
 // first run only: put the GBM post (and its made up demo numbers) in
-const { count } = db.prepare('SELECT COUNT(*) AS count FROM posts').get()
-if (count === 0) {
+// (so if you delete it later, it doesn't come back on restart)
+if (isNew) {
   const insertPost = db.prepare(`
     INSERT INTO posts (author, author_initial, school, caption, image_url, flyer_top, flyer_title,
                        colors, likes, comments, event, reached, tag_taps, created_at)
