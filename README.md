@@ -5,7 +5,8 @@
 ### [Try it live: insta-events-ws86.onrender.com](https://insta-events-ws86.onrender.com)
 
  
- **[Read the full build log (PDF)](docs/build-log.pdf):** every step from idea to launch, and every bug I fixed.
+ **[Read the full build log (PDF)]([build log - insta events.pdf](https://github.com/user-attachments/files/34052161/build.log.-.insta.events.pdf)
+):** every step from idea to launch, and every bug I fixed.
 
 Clubs post their events on Instagram, and students screenshot the flyer and forget about it. This project adds an **Event tag** to posts. Tap it, pick a reminder, and the event goes straight into your Google, Apple, or Outlook Calendar. If the club changes the time or room later, your calendar updates on its own.
 
