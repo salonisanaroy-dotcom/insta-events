@@ -1238,7 +1238,7 @@ a.btn {
   width: 240px;
   height: 240px;
   border-radius: 16px;
-  background: linear-gradient(90deg, #4b1e78, #2f6fdb);
+  background: linear-gradient(90deg, #0f766e, #2563eb);
   color: white;
   display: flex;
   flex-direction: column;

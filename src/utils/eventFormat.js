@@ -20,7 +20,7 @@ export function eventLabels(event) {
     flyerDate: short.replace(',', '').toUpperCase(), // THU OCT 15
     startLabel: start,
     timeRange: samePeriod ? `${start.slice(0, -3)} to ${end}` : `${start} to ${end}`, // 7:00 to 8:30 PM
-    shortLocation: event.location.split(',')[0], // JSOM 1.118
+    shortLocation: event.location.split(',')[0], // ECSS 2.410
   }
 }
 

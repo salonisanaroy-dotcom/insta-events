@@ -198,15 +198,15 @@ export default function App() {
   // what the draft looks like as a real post (the server gives it a real id when shared)
   const draftPost = {
     id: 'draft',
-    author: 'utdakpsi',
-    authorInitial: 'A',
+    author: 'cometcoders',
+    authorInitial: 'C',
     school: 'UT Dallas',
     caption: draft.caption.trim(),
     likes: 0,
     comments: 0,
     postedAgo: 'Just now',
     imageUrl: draft.imageUrl,
-    flyerTop: 'UTDAKPSI',
+    flyerTop: 'COMET CODERS',
     flyerTitle: draft.event ? draft.event.title : draft.caption.slice(0, 40),
     colors: flyerColors[posts.length % flyerColors.length],
     event: draft.event,

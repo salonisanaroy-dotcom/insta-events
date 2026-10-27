@@ -58,7 +58,7 @@ db.exec(`
   );
 `)
 
-// first run only: put the GBM post (and its made up demo numbers) in
+// first run only: put the Hack Night post (and its made up demo numbers) in
 // (so if you delete it later, it doesn't come back on restart)
 if (isNew) {
   const insertPost = db.prepare(`

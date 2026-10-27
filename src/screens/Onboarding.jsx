@@ -36,14 +36,14 @@ export default function Onboarding({ onFinish }) {
       <div className="onboarding-art">
         {slide.art === 'flyer' && (
           <div className="mini-flyer">
-            <p>General Body Meeting</p>
-            <span>THU OCT 15 · 7 PM</span>
+            <p>Hack Night</p>
+            <span>THU NOV 12 · 7 PM</span>
           </div>
         )}
         {slide.art === 'tag' && (
           <div className="mini-flyer">
-            <p>General Body Meeting</p>
-            <EventTag label="GBM · Thu, Oct 15" onClick={() => {}} pulse />
+            <p>Hack Night</p>
+            <EventTag label="Hack Night · Thu, Nov 12" onClick={() => {}} pulse />
           </div>
         )}
         {slide.art === 'calendars' && (

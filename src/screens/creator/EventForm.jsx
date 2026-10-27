@@ -71,10 +71,10 @@ export default function EventForm({ initial, mode = 'create', addedCount = 0, on
           <p className="form-intro">Fill in your event's details. Students will see these when they tap the tag.</p>
         )}
         <Field label="Event name" error={errors.title}>
-          <input value={form.title} onChange={(e) => update('title', e.target.value)} placeholder="e.g. General Body Meeting" />
+          <input value={form.title} onChange={(e) => update('title', e.target.value)} placeholder="e.g. Comet Coders Hack Night" />
         </Field>
         <Field label="Short name for the tag (optional)">
-          <input value={form.shortTitle} maxLength={16} onChange={(e) => update('shortTitle', e.target.value)} placeholder="e.g. GBM" />
+          <input value={form.shortTitle} maxLength={16} onChange={(e) => update('shortTitle', e.target.value)} placeholder="e.g. Hack Night" />
         </Field>
         <Field label="Date" error={errors.date}>
           <input type="date" required value={form.date} onChange={(e) => update('date', e.target.value)} />
@@ -88,7 +88,7 @@ export default function EventForm({ initial, mode = 'create', addedCount = 0, on
           </Field>
         </div>
         <Field label="Location" error={errors.location}>
-          <input value={form.location} onChange={(e) => update('location', e.target.value)} placeholder="e.g. JSOM 1.118, UT Dallas" />
+          <input value={form.location} onChange={(e) => update('location', e.target.value)} placeholder="e.g. ECSS 2.410, UT Dallas" />
         </Field>
 
         <div className="toggle-row">
