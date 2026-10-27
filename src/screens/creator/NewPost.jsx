@@ -2,13 +2,20 @@ import Icon from '../../components/Icon'
 import PageHeader from '../../components/PageHeader'
 import OptionRow from '../../components/OptionRow'
 import { eventLabels } from '../../utils/eventFormat'
+import { shrinkImage } from '../../utils/shrinkImage'
 
 // C1: start a post, pick a photo, write a caption, add an event
 export default function NewPost({ draft, setDraft, onCancel, onAddEvent, onNext }) {
-  // turn the picked file into a temporary url the browser can show
-  function handlePhoto(e) {
+  // shrink the picked photo into text the database can keep
+  async function handlePhoto(e) {
     const file = e.target.files[0]
-    if (file) setDraft({ ...draft, imageUrl: URL.createObjectURL(file) })
+    if (!file) return
+    try {
+      const imageUrl = await shrinkImage(file)
+      setDraft((current) => ({ ...current, imageUrl }))
+    } catch {
+      // not a photo the browser can open (like some iphone HEIC files), so keep the old one
+    }
   }
 
   const eventLabel = draft.event

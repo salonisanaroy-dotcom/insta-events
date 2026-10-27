@@ -33,8 +33,8 @@ export default function AccountSheet({ me, calendar, onChangeCalendar, onReplay,
             </div>
             <span className="connected-pill">Connected</span>
           </div>
-          {/* goes to the server, which forgets your login, then comes back */}
-          <a className="danger-btn" href="/auth/logout">Disconnect Google Calendar</a>
+          {/* goes to the server, which ends this browser's session, then comes back */}
+          <a className="danger-btn" href="/auth/logout">Sign out</a>
         </>
       ) : (
         <p className="subtext account-empty">

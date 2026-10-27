@@ -1,13 +1,10 @@
-// talks to our server about google calendar
+// everything the app asks our server for, in one place
 
-// only send what the server needs (not the photo)
-const slim = (post) => ({ id: post.id, author: post.author, event: post.event })
-
-async function postJson(url, body) {
+async function request(method, url, body) {
   const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    method,
+    headers: body ? { 'Content-Type': 'application/json' } : {},
+    body: body ? JSON.stringify(body) : undefined,
   })
   const data = await res.json().catch(() => ({}))
   if (res.status === 401) {
@@ -19,12 +16,23 @@ async function postJson(url, body) {
   return data
 }
 
-// add an event to the signed in person's google calendar
-export function sendToGoogle(post, reminder) {
-  return postJson('/api/calendar/add', { post: slim(post), reminder }) // -> { ok, link }
-}
+// who's signed in on this browser -> { connected, email, name }
+export const getMe = () => request('GET', '/api/me')
 
-// after an edit, update it in their calendar if they added it
-export function updateInGoogle(post) {
-  return postJson('/api/calendar/update', { post: slim(post) }) // -> { updated }
-}
+// the whole feed from the database, newest first
+export const getPosts = () => request('GET', '/api/posts')
+
+// share a new post -> the saved post (with its real id)
+export const createPost = (post) => request('POST', '/api/posts', post)
+
+// count a tap on the event tag -> the post with new stats
+export const tapEventTag = (id) => request('POST', `/api/posts/${id}/tap`)
+
+// apple / outlook: the file downloaded, just count it -> the post with new stats
+export const countAdd = (id, reminder, calendar) => request('POST', `/api/posts/${id}/added`, { reminder, calendar })
+
+// google: the server puts it in their real calendar -> { link, post }
+export const sendToGoogle = (id, reminder) => request('POST', '/api/calendar/add', { postId: id, reminder })
+
+// organizer saves an edit -> { post, updated, failed } (updated = google calendars changed)
+export const saveEvent = (id, event) => request('PUT', `/api/posts/${id}/event`, { event })

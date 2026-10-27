@@ -1352,3 +1352,17 @@ a.btn {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* ---------- day 4: feed loading / server off ---------- */
+.feed-empty {
+  padding: 48px 24px;
+  text-align: center;
+  color: #737373;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.feed-empty code {
+  background: #efefef;
+  padding: 2px 6px;
+  border-radius: 4px;
+}

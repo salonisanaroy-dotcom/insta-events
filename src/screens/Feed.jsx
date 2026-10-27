@@ -2,7 +2,7 @@ import Icon from '../components/Icon'
 import Post from '../components/Post'
 
 // S1: instagram home feed
-export default function Feed({ posts, onOpenEvent, onInsights, onCreate, onAccount, onBookmark, showTip, onDismissTip, onHelp }) {
+export default function Feed({ posts, loading, offline, onOpenEvent, onInsights, onCreate, onAccount, onBookmark, showTip, onDismissTip, onHelp }) {
   // the tip only goes on the first post that has an event
   const tipPostId = posts.find((p) => p.event)?.id
 
@@ -20,6 +20,12 @@ export default function Feed({ posts, onOpenEvent, onInsights, onCreate, onAccou
 
       {/* only the middle part scrolls, header + nav stay put */}
       <div className="feed-scroll">
+        {loading && <p className="feed-empty">Loading...</p>}
+        {offline && (
+          <p className="feed-empty">
+            Can't reach the server.<br />Run <code>npm run dev</code> in the server folder, then refresh.
+          </p>
+        )}
         {posts.map((post) => (
           <Post
             key={post.id}

@@ -12,10 +12,10 @@ import NewPost from './screens/creator/NewPost'
 import EventForm from './screens/creator/EventForm'
 import ReviewPost from './screens/creator/ReviewPost'
 import Insights from './screens/creator/Insights'
-import { initialPosts, flyerColors, emptyStats } from './data/posts'
+import { flyerColors, emptyStats } from './data/posts'
 import { plural } from './utils/eventFormat'
 import { downloadIcs } from './utils/icsFile'
-import { sendToGoogle, updateInGoogle } from './utils/api'
+import { getMe, getPosts, createPost, tapEventTag, countAdd, sendToGoogle, saveEvent } from './utils/api'
 import { load, save } from './utils/storage'
 
 // a fresh, empty post being made
@@ -23,7 +23,8 @@ const blankDraft = { caption: '', imageUrl: null, event: null }
 
 export default function App() {
   // ---------- state ----------
-  const [posts, setPosts] = useState(initialPosts) // everything in the feed
+  const [posts, setPosts] = useState([]) // everything in the feed (loaded from the server)
+  const [loading, setLoading] = useState(true) // still waiting for the feed
   const [screen, setScreen] = useState('feed') // which screen is showing
   const [activeId, setActiveId] = useState(null) // which post we're looking at
   const [reminder, setReminder] = useState('1 day before') // last reminder picked
@@ -40,30 +41,10 @@ export default function App() {
   const backToFeed = () => setScreen('feed')
   const clearToast = useCallback(() => setToast(''), []) // same function every render so the timer doesn't reset
 
-  // change one post's stats without touching the others
-  function updateStats(id, change) {
-    setPosts((prev) => prev.map((p) => (p.id === id ? { ...p, stats: change(p.stats) } : p)))
-  }
-
-  // count an add once per post, then bump the insights numbers
-  const recordAdd = useCallback((id, choice, cal) => {
-    setPosts((prev) =>
-      prev.map((p) => {
-        if (p.id !== id || p.addedByMe) return p // not this post, or already counted
-        const s = p.stats
-        return {
-          ...p,
-          addedByMe: true,
-          addedTo: cal, // google, apple, or outlook (so edits know to update google)
-          stats: {
-            ...s,
-            added: s.added + 1,
-            reminders: { ...s.reminders, [choice]: s.reminders[choice] + 1 },
-            addsByDay: [...s.addsByDay.slice(0, -1), s.addsByDay.at(-1) + 1], // add to today
-          },
-        }
-      }),
-    )
+  // the server sent back a fresher copy of a post (new stats etc), swap it in
+  // savedByMe (the bookmark) only lives in the browser, so keep it
+  const replacePost = useCallback((fresh) => {
+    setPosts((prev) => prev.map((p) => (p.id === fresh.id ? { ...fresh, savedByMe: p.savedByMe } : p)))
   }, [])
 
   // ask the server to put the event in their real google calendar
@@ -71,9 +52,9 @@ export default function App() {
     (post, choice) => {
       setGoogleResult({ status: 'loading' })
       setScreen('added') // shows the spinner while we wait
-      sendToGoogle(post, choice)
+      sendToGoogle(post.id, choice)
         .then((data) => {
-          recordAdd(post.id, choice, 'google')
+          replacePost(data.post) // new totals from the database
           setGoogleResult({ status: 'done', link: data.link })
         })
         .catch((err) => {
@@ -86,16 +67,17 @@ export default function App() {
           }
         })
     },
-    [recordAdd],
+    [replacePost],
   )
 
   // ---------- when the app first loads ----------
   useEffect(() => {
-    // ask the server if you're signed in to google
-    fetch('/api/me')
-      .then((res) => res.json())
-      .then((data) => {
+    // ask the server who's signed in AND for the feed, at the same time
+    Promise.all([getMe(), getPosts()])
+      .then(([data, feed]) => {
         setMe(data)
+        setPosts(feed)
+        setLoading(false)
 
         // did we just come back from google's sign in page?
         const params = new URLSearchParams(window.location.search)
@@ -103,8 +85,8 @@ export default function App() {
 
         if (params.get('connected') === '1' && data.connected && pending) {
           // finish the add they started before leaving for google
-          // (new posts don't survive the reload yet, so look in the starting posts)
-          const post = initialPosts.find((p) => p.id === pending.postId)
+          // (posts are in the database now, so even brand new ones are still here)
+          const post = feed.find((p) => p.id === pending.postId)
           if (post) {
             setActiveId(post.id)
             setReminder(pending.reminder)
@@ -120,7 +102,10 @@ export default function App() {
         sessionStorage.removeItem('pendingAdd')
         if (params.has('connected')) window.history.replaceState({}, '', '/') // clean up the url
       })
-      .catch(() => setMe({ connected: false, offline: true })) // server isn't running
+      .catch(() => {
+        setMe({ connected: false, offline: true }) // server isn't running
+        setLoading(false)
+      })
   }, [addToGoogle])
 
   // ---------- first time help ----------
@@ -151,7 +136,7 @@ export default function App() {
     if (showTip) dismissTip() // they found the tag, tip did its job
     setActiveId(id)
     setScreen('eventCard')
-    updateStats(id, (s) => ({ ...s, tagTaps: s.tagTaps + 1 })) // counts toward insights
+    tapEventTag(id).then(replacePost).catch(() => {}) // counts toward insights (not a big deal if it fails)
   }
 
   function handleAdd(choice, cal) {
@@ -161,8 +146,10 @@ export default function App() {
     // apple + outlook: download an event file, no sign in needed
     if (cal !== 'google') {
       downloadIcs(activePost, choice)
-      recordAdd(activeId, choice, cal)
       setScreen('added')
+      countAdd(activeId, choice, cal)
+        .then((fresh) => replacePost({ ...fresh, addedByMe: true, addedTo: cal }))
+        .catch(() => {})
       return
     }
 
@@ -207,9 +194,9 @@ export default function App() {
     setScreen(formReturn)
   }
 
-  // what the draft looks like as a real post
+  // what the draft looks like as a real post (the server gives it a real id when shared)
   const draftPost = {
-    id: Date.now(),
+    id: 'draft',
     author: 'utdakpsi',
     authorInitial: 'A',
     school: 'UT Dallas',
@@ -226,10 +213,15 @@ export default function App() {
   }
 
   function sharePost() {
-    setPosts([draftPost, ...posts]) // newest on top
-    setDraft(blankDraft)
-    setScreen('feed')
-    setToast('Posted!')
+    const { id, stats, postedAgo, ...newPost } = draftPost // the server makes these
+    createPost(newPost)
+      .then((saved) => {
+        setPosts((prev) => [saved, ...prev]) // newest on top
+        setDraft(blankDraft)
+        setScreen('feed')
+        setToast('Posted!')
+      })
+      .catch(() => setToast("Couldn't post. Is the server running?"))
   }
 
   function openInsights(id) {
@@ -238,16 +230,19 @@ export default function App() {
   }
 
   function saveEdit(event) {
-    const updated = { ...activePost, event }
-    setPosts((prev) => prev.map((p) => (p.id === activeId ? updated : p)))
-    const n = activePost.stats.added
-    setToast(n > 0 && event.autoUpdate ? `Event updated · ${plural(n, 'calendar')} updated` : 'Event updated')
+    replacePost({ ...activePost, event }) // show the change right away
     setScreen('insights')
+    setToast('Saving...')
 
-    // if you added it to google yourself, really update it there too
-    if (event.autoUpdate && updated.addedTo === 'google') {
-      updateInGoogle(updated).catch(() => setToast("Event updated, but your Google Calendar couldn't be updated"))
-    }
+    // the server saves it, then updates it in everyone's google calendar
+    saveEvent(activeId, event)
+      .then(({ post, updated, failed }) => {
+        replacePost(post)
+        if (updated > 0) setToast(`Event updated · ${plural(updated, 'Google Calendar')} updated`)
+        else setToast('Event updated')
+        if (failed > 0) console.warn(`${failed} calendar(s) couldn't be updated, see the server terminal`)
+      })
+      .catch(() => setToast("Couldn't save. Is the server running?"))
   }
 
   // ---------- full page screens ----------
@@ -291,6 +286,8 @@ export default function App() {
         <>
           <Feed
             posts={posts}
+            loading={loading}
+            offline={me.offline}
             onOpenEvent={openEvent}
             onInsights={openInsights}
             onCreate={startPost}
