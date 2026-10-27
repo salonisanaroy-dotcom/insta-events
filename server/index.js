@@ -151,14 +151,19 @@ function toGoogleEvent(post, reminder) {
 }
 
 // update their google event if it's still there, otherwise add a new one. returns google's event
+// (a deleted google event doesn't fully disappear, it just gets status "cancelled",
+//  so we check for that instead of updating an event they can't see)
 async function putInCalendar(user, post, reminder, eventId) {
   const calendar = googleFor(user)
   const requestBody = toGoogleEvent(post, reminder)
   if (eventId) {
     try {
-      return (await calendar.events.patch({ calendarId: 'primary', eventId, requestBody })).data
+      const { data: existing } = await calendar.events.get({ calendarId: 'primary', eventId })
+      if (existing.status !== 'cancelled') {
+        return (await calendar.events.patch({ calendarId: 'primary', eventId, requestBody })).data
+      }
     } catch (err) {
-      if (err.code !== 404 && err.code !== 410) throw err // 404/410 = they deleted it, so add again
+      if (err.code !== 404 && err.code !== 410) throw err // 404/410 = it's gone for good
     }
   }
   return (await calendar.events.insert({ calendarId: 'primary', requestBody })).data
@@ -305,7 +310,9 @@ app.post('/api/calendar/add', safe(async (req, res) => {
     await saveAdd(row.id, user, 'google', req.body.reminder, saved.id)
 
     console.log(`added "${post.event.title}" to ${user.email}'s calendar`)
-    res.json({ link: saved.htmlLink, post: await toPost(row, user) })
+    // authuser = open it in THIS google account, even if the browser has several signed in
+    const link = `${saved.htmlLink}&authuser=${encodeURIComponent(user.email)}`
+    res.json({ link, post: await toPost(row, user) })
   } catch (err) {
     console.error('adding to calendar failed:', err.message)
     res.status(500).json({ error: err.message })
