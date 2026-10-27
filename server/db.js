@@ -1,15 +1,33 @@
-// day 4: the database. one file (insta.db) that keeps everything after a restart
-// node has sqlite built in (node 22.13 or newer), so there's nothing to install
-import { DatabaseSync } from 'node:sqlite'
+// the database. on your laptop it's a file (insta.db). online it's Turso, a hosted
+// copy of the same kind of database, so it doesn't get wiped when the server restarts
+import { createClient } from '@libsql/client'
 import { seedPosts, seedAdds } from './seed.js'
 
-export const db = new DatabaseSync('./insta.db') // makes the file the first time
+const client = createClient({
+  url: process.env.TURSO_DATABASE_URL || 'file:insta.db', // no turso url = use the local file
+  authToken: process.env.TURSO_AUTH_TOKEN,
+})
+
+// three small helpers so the rest of the code stays short
+// get = one row (or undefined), all = list of rows, run = change something
+export async function get(sql, ...args) {
+  const result = await client.execute({ sql, args })
+  return result.rows[0]
+}
+export async function all(sql, ...args) {
+  const result = await client.execute({ sql, args })
+  return result.rows
+}
+export async function run(sql, ...args) {
+  const result = await client.execute({ sql, args })
+  return { lastInsertRowid: Number(result.lastInsertRowid) }
+}
 
 // is this a brand new database? (checked before we make the tables)
-const isNew = !db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'posts'").get()
+const isNew = !(await get("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'posts'"))
 
 // the tables (like sheets in a spreadsheet). "if not exists" = only the first time
-db.exec(`
+await client.executeMultiple(`
   -- everyone who signed in with google
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY,
@@ -36,7 +54,7 @@ db.exec(`
     image_url TEXT,         -- the photo, shrunk and saved as text
     flyer_top TEXT,
     flyer_title TEXT,
-    colors TEXT,            -- json, like ["#4b1e78","#2f6fdb"]
+    colors TEXT,            -- json, like ["#0f766e","#2563eb"]
     likes INTEGER DEFAULT 0,
     comments INTEGER DEFAULT 0,
     event TEXT,             -- json with title, date, times, location... (empty for normal posts)
@@ -61,19 +79,23 @@ db.exec(`
 // first run only: put the Hack Night post (and its made up demo numbers) in
 // (so if you delete it later, it doesn't come back on restart)
 if (isNew) {
-  const insertPost = db.prepare(`
-    INSERT INTO posts (author, author_initial, school, caption, image_url, flyer_top, flyer_title,
-                       colors, likes, comments, event, reached, tag_taps, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-  const insertAdd = db.prepare('INSERT INTO adds (post_id, calendar, reminder, added_at) VALUES (?, ?, ?, ?)')
-
   for (const p of seedPosts) {
-    const { lastInsertRowid: postId } = insertPost.run(
+    const { lastInsertRowid: postId } = await run(
+      `INSERT INTO posts (author, author_initial, school, caption, image_url, flyer_top, flyer_title,
+                          colors, likes, comments, event, reached, tag_taps, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       p.author, p.authorInitial, p.school, p.caption, null, p.flyerTop, p.flyerTitle,
       JSON.stringify(p.colors), p.likes, p.comments, JSON.stringify(p.event), p.reached, p.tagTaps,
       p.createdAt,
     )
-    for (const a of seedAdds) insertAdd.run(postId, 'demo', a.reminder, a.addedAt)
+    // all 42 demo adds in one trip instead of 42 trips
+    await client.batch(
+      seedAdds.map((a) => ({
+        sql: 'INSERT INTO adds (post_id, calendar, reminder, added_at) VALUES (?, ?, ?, ?)',
+        args: [postId, 'demo', a.reminder, a.addedAt],
+      })),
+      'write',
+    )
   }
   console.log('new database, added the starting post')
 }

@@ -1,11 +1,18 @@
 import express from 'express'
 import { google } from 'googleapis'
 import crypto from 'node:crypto'
-import { db } from './db.js'
+import path from 'node:path'
+import fs from 'node:fs'
+import { get, all, run } from './db.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
-const FRONTEND_URL = 'http://localhost:5173'
+// where the website lives. on your laptop it's vite; online it's your render address
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173'
+const ONLINE = FRONTEND_URL.startsWith('https') // true on render, false on your laptop
+
+// lets async routes pass errors to express instead of crashing the server
+const safe = (handler) => (req, res, next) => handler(req, res).catch(next)
 
 app.use(express.json({ limit: '10mb' })) // read json from the frontend (big enough for a photo)
 
@@ -37,13 +44,14 @@ function readCookies(req) {
 }
 
 // the signed in user for this browser, or null
-function currentUser(req) {
+async function currentUser(req) {
   const { sid } = readCookies(req)
   if (!sid) return null
-  return db.prepare(`
+  const user = await get(`
     SELECT users.* FROM sessions
     JOIN users ON users.id = sessions.user_id
-    WHERE sessions.id = ?`).get(sid) ?? null
+    WHERE sessions.id = ?`, sid)
+  return user ?? null
 }
 
 // a google client signed in as one user (anyone, not just whoever is using the site right now)
@@ -51,9 +59,9 @@ function googleFor(user) {
   const client = makeClient()
   client.setCredentials(JSON.parse(user.tokens))
   // login keys expire after about an hour, google sends fresh ones, so save them
-  client.on('tokens', (fresh) => {
-    const { tokens } = db.prepare('SELECT tokens FROM users WHERE id = ?').get(user.id)
-    db.prepare('UPDATE users SET tokens = ? WHERE id = ?').run(JSON.stringify({ ...JSON.parse(tokens), ...fresh }), user.id)
+  client.on('tokens', async (fresh) => {
+    const { tokens } = await get('SELECT tokens FROM users WHERE id = ?', user.id)
+    await run('UPDATE users SET tokens = ? WHERE id = ?', JSON.stringify({ ...JSON.parse(tokens), ...fresh }), user.id)
   })
   return google.calendar({ version: 'v3', auth: client })
 }
@@ -71,8 +79,8 @@ function timeAgo(iso) {
 }
 
 // count the adds for one post: total, by reminder, and by day for the last 7 days
-function statsFor(row) {
-  const adds = db.prepare('SELECT reminder, added_at FROM adds WHERE post_id = ?').all(row.id)
+async function statsFor(row) {
+  const adds = await all('SELECT reminder, added_at FROM adds WHERE post_id = ?', row.id)
   const reminders = { '1 day before': 0, '1 hour before': 0, 'No reminder': 0 }
   const addsByDay = [0, 0, 0, 0, 0, 0, 0] // oldest day first, today last
 
@@ -89,8 +97,8 @@ function statsFor(row) {
 }
 
 // one post, shaped like the old src/data/posts.js, plus whether *you* added it
-function toPost(row, user) {
-  const mine = user && db.prepare('SELECT * FROM adds WHERE post_id = ? AND user_id = ?').get(row.id, user.id)
+async function toPost(row, user) {
+  const mine = user && (await get('SELECT * FROM adds WHERE post_id = ? AND user_id = ?', row.id, user.id))
   return {
     id: row.id,
     author: row.author,
@@ -105,13 +113,13 @@ function toPost(row, user) {
     flyerTitle: row.flyer_title,
     colors: JSON.parse(row.colors),
     event: row.event ? JSON.parse(row.event) : null,
-    stats: statsFor(row),
+    stats: await statsFor(row),
     addedByMe: Boolean(mine),
     addedTo: mine?.calendar ?? null,
   }
 }
 
-const findPost = (id) => db.prepare('SELECT * FROM posts WHERE id = ?').get(Number(id))
+const findPost = (id) => get('SELECT * FROM posts WHERE id = ?', Number(id))
 
 // ================= google calendar helpers (from day 3) =================
 
@@ -158,14 +166,14 @@ async function putInCalendar(user, post, reminder, eventId) {
 
 // save an add. a signed in person only ever has one row per post (it gets updated)
 function saveAdd(postId, user, calendar, reminder, googleEventId = null) {
-  db.prepare(`
+  return run(`
     INSERT INTO adds (post_id, user_id, calendar, reminder, google_event_id, added_at)
     VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT (post_id, user_id) DO UPDATE SET
       calendar = excluded.calendar,
       reminder = excluded.reminder,
-      google_event_id = COALESCE(excluded.google_event_id, adds.google_event_id)
-  `).run(postId, user?.id ?? null, calendar, reminder, googleEventId, new Date().toISOString())
+      google_event_id = COALESCE(excluded.google_event_id, adds.google_event_id)`,
+    postId, user?.id ?? null, calendar, reminder, googleEventId, new Date().toISOString())
 }
 
 // ================= routes =================
@@ -186,7 +194,7 @@ app.get('/auth/google', (req, res) => {
 })
 
 // step 2: google sends them back here with a one time code
-app.get('/auth/google/callback', async (req, res) => {
+app.get('/auth/google/callback', safe(async (req, res) => {
   const { code, error } = req.query
   if (error) return res.redirect(`${FRONTEND_URL}/?connected=0`) // they hit cancel
 
@@ -197,23 +205,25 @@ app.get('/auth/google/callback', async (req, res) => {
     const { data: profile } = await google.oauth2({ version: 'v2', auth: client }).userinfo.get()
 
     // new person? add them. seen them before? update their keys
-    const existing = db.prepare('SELECT * FROM users WHERE google_id = ?').get(profile.id)
+    const existing = await get('SELECT * FROM users WHERE google_id = ?', profile.id)
     let userId
     if (existing) {
       const merged = { ...JSON.parse(existing.tokens), ...tokens } // keep the old refresh token if google didn't send a new one
-      db.prepare('UPDATE users SET email = ?, name = ?, tokens = ? WHERE id = ?')
-        .run(profile.email, profile.name, JSON.stringify(merged), existing.id)
+      await run('UPDATE users SET email = ?, name = ?, tokens = ? WHERE id = ?',
+        profile.email, profile.name, JSON.stringify(merged), existing.id)
       userId = existing.id
     } else {
-      userId = db.prepare('INSERT INTO users (google_id, email, name, tokens) VALUES (?, ?, ?, ?)')
-        .run(profile.id, profile.email, profile.name, JSON.stringify(tokens)).lastInsertRowid
+      const added = await run('INSERT INTO users (google_id, email, name, tokens) VALUES (?, ?, ?, ?)',
+        profile.id, profile.email, profile.name, JSON.stringify(tokens))
+      userId = added.lastInsertRowid
     }
 
     // give this browser its own session, remembered in a cookie for 30 days
     const sid = crypto.randomUUID()
-    db.prepare('INSERT INTO sessions (id, user_id, created_at) VALUES (?, ?, ?)').run(sid, userId, new Date().toISOString())
+    await run('INSERT INTO sessions (id, user_id, created_at) VALUES (?, ?, ?)', sid, userId, new Date().toISOString())
     res.cookie('sid', sid, {
       httpOnly: true, // the page's javascript can't read it, only the server
+      secure: ONLINE, // online, only send it over https
       sameSite: 'lax',
       maxAge: 30 * 24 * 60 * 60 * 1000,
     })
@@ -224,106 +234,106 @@ app.get('/auth/google/callback', async (req, res) => {
     console.error('google sign in failed:', err.message)
     res.redirect(`${FRONTEND_URL}/?connected=0`)
   }
-})
+}))
 
 // who is signed in on this browser
-app.get('/api/me', (req, res) => {
-  const user = currentUser(req)
+app.get('/api/me', safe(async (req, res) => {
+  const user = await currentUser(req)
   if (!user) return res.json({ connected: false })
   res.json({ connected: true, email: user.email, name: user.name }) // never send the tokens
-})
+}))
 
 // sign out this browser only. your events still get updates if an organizer edits them
-app.get('/auth/logout', (req, res) => {
+app.get('/auth/logout', safe(async (req, res) => {
   const { sid } = readCookies(req)
-  if (sid) db.prepare('DELETE FROM sessions WHERE id = ?').run(sid)
+  if (sid) await run('DELETE FROM sessions WHERE id = ?', sid)
   res.clearCookie('sid')
   res.redirect(FRONTEND_URL)
-})
+}))
 
 // the feed, newest first
-app.get('/api/posts', (req, res) => {
-  const user = currentUser(req)
-  const rows = db.prepare('SELECT * FROM posts ORDER BY id DESC').all()
-  res.json(rows.map((row) => toPost(row, user)))
-})
+app.get('/api/posts', safe(async (req, res) => {
+  const user = await currentUser(req)
+  const rows = await all('SELECT * FROM posts ORDER BY id DESC')
+  res.json(await Promise.all(rows.map((row) => toPost(row, user))))
+}))
 
 // share a new post
-app.post('/api/posts', (req, res) => {
+app.post('/api/posts', safe(async (req, res) => {
   const p = req.body
   if (!p.caption && !p.event) return res.status(400).json({ error: 'A post needs a caption or an event' })
 
-  const { lastInsertRowid } = db.prepare(`
+  const { lastInsertRowid } = await run(`
     INSERT INTO posts (author, author_initial, school, caption, image_url, flyer_top, flyer_title,
                        colors, event, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     p.author, p.authorInitial, p.school, p.caption ?? '', p.imageUrl ?? null, p.flyerTop, p.flyerTitle,
     JSON.stringify(p.colors), p.event ? JSON.stringify(p.event) : null, new Date().toISOString(),
   )
   console.log(`new post #${lastInsertRowid}${p.event ? `: "${p.event.title}"` : ''}`)
-  res.json(toPost(findPost(lastInsertRowid), currentUser(req)))
-})
+  res.json(await toPost(await findPost(lastInsertRowid), await currentUser(req)))
+}))
 
 // someone tapped the event tag (for insights)
-app.post('/api/posts/:id/tap', (req, res) => {
-  db.prepare('UPDATE posts SET tag_taps = tag_taps + 1 WHERE id = ?').run(Number(req.params.id))
-  const row = findPost(req.params.id)
+app.post('/api/posts/:id/tap', safe(async (req, res) => {
+  await run('UPDATE posts SET tag_taps = tag_taps + 1 WHERE id = ?', Number(req.params.id))
+  const row = await findPost(req.params.id)
   if (!row) return res.status(404).json({ error: 'No such post' })
-  res.json(toPost(row, currentUser(req)))
-})
+  res.json(await toPost(row, await currentUser(req)))
+}))
 
 // apple / outlook add (the browser downloaded the file, we just count it)
-app.post('/api/posts/:id/added', (req, res) => {
-  const row = findPost(req.params.id)
+app.post('/api/posts/:id/added', safe(async (req, res) => {
+  const row = await findPost(req.params.id)
   if (!row) return res.status(404).json({ error: 'No such post' })
-  const user = currentUser(req)
-  saveAdd(row.id, user, req.body.calendar, req.body.reminder)
-  res.json(toPost(row, user))
-})
+  const user = await currentUser(req)
+  await saveAdd(row.id, user, req.body.calendar, req.body.reminder)
+  res.json(await toPost(row, user))
+}))
 
 // student taps "add to google calendar"
-app.post('/api/calendar/add', async (req, res) => {
-  const user = currentUser(req)
+app.post('/api/calendar/add', safe(async (req, res) => {
+  const user = await currentUser(req)
   if (!user) return res.status(401).json({ error: 'Not connected to Google' })
-  const row = findPost(req.body.postId)
+  const row = await findPost(req.body.postId)
   if (!row?.event) return res.status(404).json({ error: 'No such event' })
 
   try {
-    const post = toPost(row, user) // the event details come from our database, not the browser
-    const mine = db.prepare('SELECT google_event_id FROM adds WHERE post_id = ? AND user_id = ?').get(row.id, user.id)
+    const post = await toPost(row, user) // the event details come from our database, not the browser
+    const mine = await get('SELECT google_event_id FROM adds WHERE post_id = ? AND user_id = ?', row.id, user.id)
     const saved = await putInCalendar(user, post, req.body.reminder, mine?.google_event_id)
-    saveAdd(row.id, user, 'google', req.body.reminder, saved.id)
+    await saveAdd(row.id, user, 'google', req.body.reminder, saved.id)
 
     console.log(`added "${post.event.title}" to ${user.email}'s calendar`)
-    res.json({ link: saved.htmlLink, post: toPost(row, user) })
+    res.json({ link: saved.htmlLink, post: await toPost(row, user) })
   } catch (err) {
     console.error('adding to calendar failed:', err.message)
     res.status(500).json({ error: err.message })
   }
-})
+}))
 
 // organizer edits an event: save it, then update it in EVERY google calendar it was added to
-app.put('/api/posts/:id/event', async (req, res) => {
-  const row = findPost(req.params.id)
+app.put('/api/posts/:id/event', safe(async (req, res) => {
+  const row = await findPost(req.params.id)
   if (!row?.event) return res.status(404).json({ error: 'No such event' })
   const { event } = req.body
-  db.prepare('UPDATE posts SET event = ? WHERE id = ?').run(JSON.stringify(event), row.id)
+  await run('UPDATE posts SET event = ? WHERE id = ?', JSON.stringify(event), row.id)
 
   let updated = 0
   let failed = 0
   if (event.autoUpdate) {
-    const post = toPost(findPost(row.id), null)
+    const post = await toPost(await findPost(row.id), null)
     // everyone who added it with google (we saved their event id + reminder)
-    const people = db.prepare(`
+    const people = await all(`
       SELECT users.*, adds.reminder, adds.google_event_id FROM adds
       JOIN users ON users.id = adds.user_id
-      WHERE adds.post_id = ? AND adds.google_event_id IS NOT NULL`).all(row.id)
+      WHERE adds.post_id = ? AND adds.google_event_id IS NOT NULL`, row.id)
 
     // send them all at once instead of waiting for each one
     const results = await Promise.allSettled(
       people.map(async (person) => {
         const saved = await putInCalendar(person, post, person.reminder, person.google_event_id)
-        db.prepare('UPDATE adds SET google_event_id = ? WHERE post_id = ? AND user_id = ?').run(saved.id, row.id, person.id)
+        await run('UPDATE adds SET google_event_id = ? WHERE post_id = ? AND user_id = ?', saved.id, row.id, person.id)
       }),
     )
     results.forEach((r, i) => {
@@ -336,21 +346,21 @@ app.put('/api/posts/:id/event', async (req, res) => {
     console.log(`edited "${event.title}": updated ${updated} Google Calendar(s)${failed ? `, ${failed} failed` : ''}`)
   }
 
-  res.json({ post: toPost(findPost(row.id), currentUser(req)), updated, failed })
-})
+  res.json({ post: await toPost(await findPost(row.id), await currentUser(req)), updated, failed })
+}))
 
 // organizer deletes a post. if auto updates are on, the event also leaves everyone's google calendar
-app.delete('/api/posts/:id', async (req, res) => {
-  const row = findPost(req.params.id)
+app.delete('/api/posts/:id', safe(async (req, res) => {
+  const row = await findPost(req.params.id)
   if (!row) return res.status(404).json({ error: 'No such post' })
   const event = row.event ? JSON.parse(row.event) : null
 
   let removed = 0
   if (event?.autoUpdate) {
-    const people = db.prepare(`
+    const people = await all(`
       SELECT users.*, adds.google_event_id FROM adds
       JOIN users ON users.id = adds.user_id
-      WHERE adds.post_id = ? AND adds.google_event_id IS NOT NULL`).all(row.id)
+      WHERE adds.post_id = ? AND adds.google_event_id IS NOT NULL`, row.id)
 
     const results = await Promise.allSettled(
       people.map(async (person) => {
@@ -368,10 +378,28 @@ app.delete('/api/posts/:id', async (req, res) => {
   }
 
   // remove the post and its adds from the database
-  db.prepare('DELETE FROM adds WHERE post_id = ?').run(row.id)
-  db.prepare('DELETE FROM posts WHERE id = ?').run(row.id)
+  await run('DELETE FROM adds WHERE post_id = ?', row.id)
+  await run('DELETE FROM posts WHERE id = ?', row.id)
   console.log(`deleted post #${row.id}${event ? ` ("${event.title}"), removed from ${removed} Google Calendar(s)` : ''}`)
   res.json({ removed })
+}))
+
+// ================= online: the server also hands out the website =================
+// "npm run build" makes a dist folder with the finished website. if it's there, send it
+const DIST = path.resolve(import.meta.dirname, '../dist')
+if (fs.existsSync(DIST)) {
+  app.use(express.static(DIST))
+  // any other page (like /?connected=1) gets the app's main page
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' || req.path.startsWith('/api') || req.path.startsWith('/auth')) return next()
+    res.sendFile(path.join(DIST, 'index.html'))
+  })
+}
+
+// if anything goes wrong, answer with an error instead of crashing
+app.use((err, req, res, next) => {
+  console.error('server error:', err.message)
+  res.status(500).json({ error: 'Something went wrong on the server' })
 })
 
-app.listen(PORT, () => console.log(`server running on http://localhost:${PORT}`))
+app.listen(PORT, () => console.log(`server running on port ${PORT} (website: ${FRONTEND_URL})`))
